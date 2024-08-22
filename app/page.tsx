@@ -1,113 +1,239 @@
-import Image from "next/image";
+"use client";
+import axios from "axios";
+import React, { useEffect, useState } from "react";
+
+interface Product {
+  id: number;
+  productName: string;
+  price: number;
+  image: string;
+  quantity: number;
+}
 
 export default function Home() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [typeButton, setTypeButton] = useState<string>("add");
+
+  const fetchProducts = () => {
+    axios
+      .get("http://localhost:3000/api/products")
+      .then((response) => {
+        setProducts(response.data);
+        setFilteredProducts(response.data);
+      })
+      .catch((error) => {
+        console.error("Error fetching products:", error);
+      });
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    const searchTermLower = searchTerm.toLowerCase();
+    const searchTermNumber = parseInt(searchTerm, 10);
+    const results = products.filter((product) =>
+      searchTermNumber
+        ? product.id === searchTermNumber
+        : product.productName.toLowerCase().includes(searchTermLower)
+    );
+    setFilteredProducts(results);
+  }, [searchTerm, products]);
+
+  const [formAddOrUpdate, setFormAddOrUpdate] = useState<Product>({
+    id: 0,
+    productName: "",
+    price: 0,
+    image: "",
+    quantity: 0,
+  });
+
+  const handleOnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setFormAddOrUpdate((prev) => ({
+      ...prev,
+      [id]: id === "quantity" || id === "price" ? Number(value) : value,
+    }));
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: "VND",
+    }).format(value);
+  };
+
+  const handleEdit = (id: number) => {
+    const productToEdit = products.find((product) => product.id === id);
+    if (productToEdit) {
+      setFormAddOrUpdate(productToEdit);
+      setTypeButton("edit");
+    }
+  };
+
+  const handleAddorUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typeButton === "add") {
+      axios
+        .post("http://localhost:3000/api/products", formAddOrUpdate)
+        .then((response) => {
+          console.log(response.data.message);
+          fetchProducts();
+          setFormAddOrUpdate({
+            id: 0,
+            productName: "",
+            price: 0,
+            image: "",
+            quantity: 0,
+          });
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    } else if (typeButton === "edit") {
+      const confirmed = window.confirm(
+        "Bạn có chắc muốn cập nhật sản phẩm này không?"
+      );
+      if (confirmed) {
+        axios
+          .put(
+            `http://localhost:3000/api/products/${formAddOrUpdate.id}`,
+            formAddOrUpdate
+          )
+          .then((response) => {
+            console.log(response.data.message);
+            fetchProducts();
+            setFormAddOrUpdate({
+              id: 0,
+              productName: "",
+              price: 0,
+              image: "",
+              quantity: 0,
+            });
+            setTypeButton("add");
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+      }
+    }
+  };
+
+  const handleDelete = (id: number) => {
+    const confirmed = window.confirm(
+      "Bạn có chắc muốn xóa sản phẩm này không?"
+    );
+    if (confirmed) {
+      axios
+        .delete(`http://localhost:3000/api/products/${id}`)
+        .then((response) => {
+          fetchProducts();
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:size-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
+    <>
+      <div className="flex flex-col gap-4">
+        <input
+          type="text"
+          placeholder="Tìm kiếm sản phẩm theo tên hoặc ID..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="border p-2 mb-4"
+        />
+        <div className="flex gap-4">
+          <table className="text-center w-3/4 border">
+            <thead>
+              <tr>
+                <th className="border">STT</th>
+                <th className="border">Tên sản phẩm</th>
+                <th className="border">Hình ảnh</th>
+                <th className="border">Giá</th>
+                <th className="border">Số lượng</th>
+                <th className="border">Chức năng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredProducts.map((product, index) => (
+                <tr key={index}>
+                  <td className="border">{index + 1}</td>
+                  <td className="border">{product.productName}</td>
+                  <td className="flex justify-center border">
+                    <img className="w-96 h-56 " src={product.image} alt="" />
+                  </td>
+                  <td className="border">{formatCurrency(product.price)}</td>
+                  <td className="border">{product.quantity}</td>
+                  <td className="border">
+                    <button
+                      onClick={() => handleEdit(product.id)}
+                      className="bg-zinc-400 p-1 me-3"
+                    >
+                      Sửa
+                    </button>
+                    <button
+                      onClick={() => handleDelete(product.id)}
+                      className="bg-red-500 text-white p-1 me-3"
+                    >
+                      Xóa
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div>
+            <form
+              action=""
+              className="flex flex-col"
+              onSubmit={handleAddorUpdate}
+            >
+              <h1 className="text-center">Thêm mới sản phẩm</h1>
+              <label htmlFor="productName">Tên</label>
+              <input
+                id="productName"
+                className="border"
+                type="text"
+                value={formAddOrUpdate.productName}
+                onChange={handleOnChange}
+              />
+              <label htmlFor="image">Hình ảnh</label>
+              <input
+                id="image"
+                className="border"
+                type="text"
+                value={formAddOrUpdate.image}
+                onChange={handleOnChange}
+              />
+              <label htmlFor="price">Giá</label>
+              <input
+                id="price"
+                className="border"
+                type="number"
+                value={formAddOrUpdate.price}
+                onChange={handleOnChange}
+              />
+              <label htmlFor="quantity">Số lượng</label>
+              <input
+                id="quantity"
+                className="border"
+                type="number"
+                value={formAddOrUpdate.quantity}
+                onChange={handleOnChange}
+              />
+              <button type="submit" className="bg-blue-600 text-white mt-2">
+                {typeButton === "add" ? "Thêm" : "Cập nhật"}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
-
-      <div className="relative z-[-1] flex place-items-center before:absolute before:h-[300px] before:w-full before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 sm:before:w-[480px] sm:after:w-[240px] before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:w-full lg:max-w-5xl lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-sm opacity-50">
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className="mb-3 text-2xl font-semibold">
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className="m-0 max-w-[30ch] text-balance text-sm opacity-50">
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+    </>
   );
 }
